@@ -42,7 +42,7 @@ def build_tracking_graph(final_score_sz, design, env):
     frame_sz = tf.shape(image)
     # used to pad the crops
     if design.pad_with_image_mean:
-        avg_chan = tf.reduce_mean(image, axis=(0,1), name='avg_chan')
+        avg_chan = tf.reduce_mean(image, reduction_indices=(0,1), name='avg_chan')
     else:
         avg_chan = None
     # pad with if necessary
@@ -57,7 +57,7 @@ def build_tracking_graph(final_score_sz, design, env):
     # use crops as input of (MatConvnet imported) pre-trained fully-convolutional Siamese net
     template_z, templates_x, p_names_list, p_val_list = _create_siamese(os.path.join(env.root_pretrained,design.net), x_crops, z_crops)
     template_z = tf.squeeze(template_z)
-    templates_z = tf.stack([template_z, template_z, template_z])
+    templates_z = tf.pack([template_z, template_z, template_z])
     # compare templates via cross-correlation
     scores = _match_templates(templates_z, templates_x, p_names_list, p_val_list)
     # upsample the score maps
@@ -144,17 +144,17 @@ def _match_templates(net_z, net_x, params_names_list, params_values_list):
     net_z = tf.transpose(net_z, perm=[1,2,0,3])
     net_x = tf.transpose(net_x, perm=[1,2,0,3])
     # z, x are [H, W, B, C]
-    Hz, Wz, B, C = tf.unstack(tf.shape(net_z))
-    Hx, Wx, Bx, Cx = tf.unstack(tf.shape(net_x))
+    Hz, Wz, B, C = tf.unpack(tf.shape(net_z))
+    Hx, Wx, Bx, Cx = tf.unpack(tf.shape(net_x))
     # assert B==Bx, ('Z and X should have same Batch size')
     # assert C==Cx, ('Z and X should have same Channels number')
     net_z = tf.reshape(net_z, (Hz, Wz, B*C, 1))
     net_x = tf.reshape(net_x, (1, Hx, Wx, B*C))
     net_final = tf.nn.depthwise_conv2d(net_x, net_z, strides=[1,1,1,1], padding='VALID')
     # final is [1, Hf, Wf, BC]
-    net_final = tf.concat(tf.split(net_final, 3, axis=3), axis=0)
+    net_final = tf.concat(0, tf.split(3, 3, net_final))
     # final is [B, Hf, Wf, C]
-    net_final = tf.expand_dims(tf.reduce_sum(net_final, axis=3), axis=3)
+    net_final = tf.expand_dims(tf.reduce_sum(net_final, reduction_indices=3), dim=3)
     # final is [B, Hf, Wf, 1]
     if _bnorm_adjust:
         bn_beta = params_values_list[params_names_list.index('fin_adjust_bnb')]
@@ -162,10 +162,14 @@ def _match_templates(net_z, net_x, params_names_list, params_values_list):
         bn_moments = params_values_list[params_names_list.index('fin_adjust_bnx')]
         bn_moving_mean = bn_moments[:,0]
         bn_moving_variance = bn_moments[:,1]**2
-        net_final = tf.layers.batch_normalization(net_final, beta_initializer=tf.constant_initializer(bn_beta),
-                                                gamma_initializer=tf.constant_initializer(bn_gamma),
-                                                moving_mean_initializer=tf.constant_initializer(bn_moving_mean),
-                                                moving_variance_initializer=tf.constant_initializer(bn_moving_variance),
-                                                training=False, trainable=False)
+	param_initializer = {
+	    'beta': tf.constant_initializer(bn_beta),
+	    'gamma':  tf.constant_initializer(bn_gamma),
+	    'moving_mean': tf.constant_initializer(bn_moving_mean),
+	    'moving_variance': tf.constant_initializer(bn_moving_variance)
+	}
+	net_final = tf.contrib.layers.batch_norm(net_final, initializers=param_initializer,
+		               		         is_training=False, trainable=False)
+
 
     return net_final

@@ -100,7 +100,6 @@ def _create_siamese(net_path, net_x, net_z):
                             filtergroup=_filtergroup_yn[i], batchnorm=_bnorm_yn[i], activation=_relu_yn[i], \
                             scope='conv'+str(i+1), reuse=True)
     
-        # TODO: Are we using max pooling? Remove if not. 
         # add max pool if required
         if _pool_stride[i]>0:
             print '\t\tMAX-POOL: size '+str(_pool_sz)+ ' and stride '+str(_pool_stride[i])

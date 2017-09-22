@@ -36,13 +36,7 @@ def build_tracking_graph(final_score_sz, design, env):
     image = 255.0 * tf.image.convert_image_dtype(image, tf.float32)
     frame_sz = tf.shape(image)
 
-    # TODO: Decide how much we can remove from this block. I can't image that we should be padding in
-    # this case. That is, design.pad_with_image_mean is probably always False.
-    # used to pad the crops
-    if design.pad_with_image_mean:
-        avg_chan = tf.reduce_mean(image, reduction_indices=(0,1), name='avg_chan')
-    else:
-        avg_chan = None
+    avg_chan = tf.reduce_mean(image, reduction_indices=(0,1), name='avg_chan')
     # pad with if necessary
     frame_padded_z, npad_z = pad_frame(image, frame_sz, pos_x_ph, pos_y_ph, z_sz_ph, avg_chan)
     frame_padded_z = tf.cast(frame_padded_z, tf.float32)

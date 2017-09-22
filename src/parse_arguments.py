@@ -3,6 +3,22 @@ from collections import namedtuple
 
 
 def parse_arguments(in_hp={}, in_evaluation={}, in_run={}):
+    """Load configuration from JSON files in parameters directory. Optionally supply parameters to
+    override/supplement the parameters loaded from the files in the parameters directory.
+
+    Args:
+	in_hp: A dictionary of hyperparameter settings.
+	in_evaluation: A dictionary of evaluation parameters.
+	in_run: A dictionary of run parameters`
+    
+    Returns:
+        a five-tuple of dictionaries:
+	    hp: A hyperparameter dictionary.
+	    evaluation: A dictionary of evaluation parameters.
+	    run: A dictionary of run parameters.
+	    env: A dictionary of environment parameters.
+	    design: A dictionary of design parameters (e.g. network architecture)
+    """
 
     with open('parameters/hyperparams.json') as json_file:
         hp = json.load(json_file)

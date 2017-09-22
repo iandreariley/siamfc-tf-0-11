@@ -28,11 +28,6 @@ _num_layers = len(_conv_stride)
 
 
 def build_tracking_graph(final_score_sz, design, env):
-    # Make a queue of file names
-    # filename_queue = tf.train.string_input_producer(frame_name_list, shuffle=False, capacity=num_frames)
-    # image_reader = tf.WholeFileReader()
-    # # Read a whole file from the queue
-    # image_name, image_file = image_reader.read(filename_queue)
 
     filename = tf.placeholder(tf.string, [], name='filename')
     image_file = tf.read_file(filename)
@@ -40,6 +35,9 @@ def build_tracking_graph(final_score_sz, design, env):
     image = tf.image.decode_jpeg(image_file)
     image = 255.0 * tf.image.convert_image_dtype(image, tf.float32)
     frame_sz = tf.shape(image)
+
+    # TODO: Decide how much we can remove from this block. I can't image that we should be padding in
+    # this case. That is, design.pad_with_image_mean is probably always False.
     # used to pad the crops
     if design.pad_with_image_mean:
         avg_chan = tf.reduce_mean(image, reduction_indices=(0,1), name='avg_chan')
@@ -54,6 +52,7 @@ def build_tracking_graph(final_score_sz, design, env):
     frame_padded_x = tf.cast(frame_padded_x, tf.float32)
     # extract tensor of x_crops (3 scales)
     x_crops = extract_crops_x(frame_padded_x, npad_x, pos_x_ph, pos_y_ph, x_sz0_ph, x_sz1_ph, x_sz2_ph, design.search_sz)
+
     # use crops as input of (MatConvnet imported) pre-trained fully-convolutional Siamese net
     template_z, templates_x, p_names_list, p_val_list = _create_siamese(os.path.join(env.root_pretrained,design.net), x_crops, z_crops)
     template_z = tf.squeeze(template_z)
@@ -105,8 +104,9 @@ def _create_siamese(net_path, net_x, net_z):
         net_z = set_convolutional(net_z, conv_W, np.swapaxes(conv_b,0,1), _conv_stride[i], \
                             bn_beta, bn_gamma, bn_moving_mean, bn_moving_variance, \
                             filtergroup=_filtergroup_yn[i], batchnorm=_bnorm_yn[i], activation=_relu_yn[i], \
-                            scope='conv'+str(i+1), reuse=True)    
-        
+                            scope='conv'+str(i+1), reuse=True)
+    
+        # TODO: Are we using max pooling? Remove if not. 
         # add max pool if required
         if _pool_stride[i]>0:
             print '\t\tMAX-POOL: size '+str(_pool_sz)+ ' and stride '+str(_pool_stride[i])

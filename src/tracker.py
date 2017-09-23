@@ -19,7 +19,7 @@ from src.visualization import show_frame, show_crops, show_scores
 # os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_device)
 
 # read default parameters and override with custom ones
-def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, templates_z, scores, start_frame):
+def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, image, templates_z, scores, start_frame):
     num_frames = np.size(frame_name_list)
     # stores tracker's output for evaluation
     bboxes = np.zeros((num_frames,4))
@@ -59,7 +59,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
         bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
 
         first_img = _load_image(frame_name_list[0])
-        templates_z_ = sess.run([templates_z], feed_dict={siam.pos_x_ph: pos_x,
+        templates_z_ = sess.run(templates_z, feed_dict={siam.pos_x_ph: pos_x,
                                                           siam.pos_y_ph: pos_y,
                                                           siam.z_sz_ph: z_sz,
                                                           image: first_img})
@@ -75,9 +75,9 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             scaled_target_h = target_h * scale_factors
 
             # load image
-
+            img = _load_image(frame_name_list[i])
             scores_ = sess.run(
-                [image, scores],
+                scores,
                 feed_dict={
                     siam.pos_x_ph: pos_x,
                     siam.pos_y_ph: pos_y,
@@ -115,7 +115,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             #                                                     image: image_
             #                                                     })
 
-                templates_z_=(1-hp.z_lr)*np.asarray(templates_z_) + hp.z_lr*np.asarray(new_templates_z_)
+            templates_z_=(1-hp.z_lr)*np.asarray(templates_z_) + hp.z_lr*np.asarray(new_templates_z_)
 
             # update template patch size
             z_sz = (1-hp.scale_lr)*z_sz + hp.scale_lr*scaled_exemplar[new_scale_id]
@@ -155,6 +155,5 @@ def _update_target_position(pos_x, pos_y, score, final_score_sz, tot_stride, sea
     return pos_x, pos_y
 
 def _load_image(img_filename):
-    img_filename = frame_name_list[i]
     img = ndimage.imread(img_filename)
     print "image dtype={0}".format(img.dtype)

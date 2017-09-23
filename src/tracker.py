@@ -7,6 +7,7 @@ import sys
 import os
 import csv
 import numpy as np
+import scipy.ndimage as ndimage
 from PIL import Image
 import time
 
@@ -24,7 +25,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
     bboxes = np.zeros((num_frames,4))
 
     scale_factors = hp.scale_step**np.linspace(-np.ceil(hp.scale_num/2), np.ceil(hp.scale_num/2), hp.scale_num)
-    # cosine window to penalize large displacements    
+    # cosine window to penalize large displacements
     hann_1d = np.expand_dims(np.hanning(final_score_sz), axis=0)
     penalty = np.transpose(hann_1d) * hann_1d
     penalty = penalty / np.sum(penalty)
@@ -53,25 +54,29 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
         # Coordinate the loading of image files.
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
-        
-        # save first frame position (from ground-truth)
-        bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h                
 
+        # save first frame position (from ground-truth)
+        bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
+
+        first_img = _load_image(frame_name_list[0])
         image_, templates_z_ = sess.run([image, templates_z], feed_dict={
                                                                         siam.pos_x_ph: pos_x,
                                                                         siam.pos_y_ph: pos_y,
                                                                         siam.z_sz_ph: z_sz,
-                                                                        filename: frame_name_list[0]})
+                                                                        image: first_img})
         new_templates_z_ = templates_z_
 
         t_start = time.time()
 
         # Get an image from the queue
-        for i in range(1, num_frames):        
+        for i in range(1, num_frames):
             scaled_exemplar = z_sz * scale_factors
             scaled_search_area = x_sz * scale_factors
             scaled_target_w = target_w * scale_factors
             scaled_target_h = target_h * scale_factors
+
+            # load image
+
             image_, scores_ = sess.run(
                 [image, scores],
                 feed_dict={
@@ -81,7 +86,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
                     siam.x_sz1_ph: scaled_search_area[1],
                     siam.x_sz2_ph: scaled_search_area[2],
                     templates_z: np.squeeze(templates_z_),
-                    filename: frame_name_list[i],
+                    image: img
                 }, **run_opts)
             scores_ = np.squeeze(scores_)
             # penalize change of scale
@@ -90,7 +95,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             # find scale with highest peak (after penalty)
             new_scale_id = np.argmax(np.amax(scores_, axis=(1,2)))
             # update scaled sizes
-            x_sz = (1-hp.scale_lr)*x_sz + hp.scale_lr*scaled_search_area[new_scale_id]        
+            x_sz = (1-hp.scale_lr)*x_sz + hp.scale_lr*scaled_search_area[new_scale_id]
             target_w = (1-hp.scale_lr)*target_w + hp.scale_lr*scaled_target_w[new_scale_id]
             target_h = (1-hp.scale_lr)*target_h + hp.scale_lr*scaled_target_h[new_scale_id]
             # select response with new_scale_id
@@ -112,19 +117,19 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
                                                                 })
 
                 templates_z_=(1-hp.z_lr)*np.asarray(templates_z_) + hp.z_lr*np.asarray(new_templates_z_)
-            
+
             # update template patch size
             z_sz = (1-hp.scale_lr)*z_sz + hp.scale_lr*scaled_exemplar[new_scale_id]
-            
+
             if run.visualization:
-                show_frame(image_, bboxes[i,:], 1)        
+                show_frame(image_, bboxes[i,:], 1)
 
         t_elapsed = time.time() - t_start
         speed = num_frames/t_elapsed
 
         # Finish off the filename queue coordinator.
         coord.request_stop()
-        coord.join(threads) 
+        coord.join(threads)
 
         # from tensorflow.python.client import timeline
         # trace = timeline.Timeline(step_stats=run_metadata.step_stats)
@@ -150,4 +155,7 @@ def _update_target_position(pos_x, pos_y, score, final_score_sz, tot_stride, sea
     pos_y, pos_x = pos_y + disp_in_frame[0], pos_x + disp_in_frame[1]
     return pos_x, pos_y
 
-
+def _load_image(img_filename):
+    img_filename = frame_name_list[i]
+    img = ndimage.imread(img_filename)
+    print "image dtype={0}".format(img.dtype)

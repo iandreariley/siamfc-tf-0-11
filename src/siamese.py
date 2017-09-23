@@ -29,9 +29,8 @@ _num_layers = len(_conv_stride)
 
 def build_tracking_graph(final_score_sz, design, env):
 
-    image = tf.placeholder(dtype=tf.float32, name='image')
+    image = tf.placeholder(dtype=tf.float32, shape=(None,None,None), name='image')
     frame_sz = tf.shape(image)
-    print "Frame Size: {0}".format(image.get_shape())
 
     avg_chan = tf.reduce_mean(image, reduction_indices=(0,1), name='avg_chan')
     # pad with if necessary

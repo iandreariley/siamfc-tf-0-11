@@ -120,8 +120,8 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             # update template patch size
             z_sz = (1-hp.scale_lr)*z_sz + hp.scale_lr*scaled_exemplar[new_scale_id]
 
-            # if run.visualization:
-            #     show_frame(image_, bboxes[i,:], 1)
+            if run.visualization:
+                show_frame(img, bboxes[i,:], 1)
 
         t_elapsed = time.time() - t_start
         speed = num_frames/t_elapsed
@@ -155,5 +155,4 @@ def _update_target_position(pos_x, pos_y, score, final_score_sz, tot_stride, sea
     return pos_x, pos_y
 
 def _load_image(img_filename):
-    img = ndimage.imread(img_filename)
-    print "image dtype={0}".format(img.dtype)
+    return ndimage.imread(img_filename).astype(np.float32)

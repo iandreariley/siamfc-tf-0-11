@@ -22,7 +22,7 @@ def main():
     # [1 4 7] => [1 1 2 3 4 5 6 7 7]  (length 3*3)
     final_score_sz = hp.response_up * (design.score_sz - 1) + 1
     # build TF graph once for all
-    filename, image, templates_z, scores = siam.build_tracking_graph(final_score_sz, design, env)
+    image, templates_z, scores = siam.build_tracking_graph(final_score_sz, design, env)
 
     # iterate through all videos of evaluation.dataset
     if evaluation.video == 'all':
@@ -107,7 +107,7 @@ def _compile_results(gt, bboxes, dist_threshold):
         precisions_ths[i] = sum(new_distances < thresholds[i])/np.size(new_distances)
 
     # integrate over the thresholds
-    precision_auc = np.trapz(precisions_ths)    
+    precision_auc = np.trapz(precisions_ths)
 
     # per frame averaged intersection over union (OTB metric)
     iou = np.mean(new_ious) * 100

@@ -29,12 +29,9 @@ _num_layers = len(_conv_stride)
 
 def build_tracking_graph(final_score_sz, design, env):
 
-    filename = tf.placeholder(tf.string, [], name='filename')
-    image_file = tf.read_file(filename)
-    # Decode the image as a JPEG file, this will turn it into a Tensor
-    image = tf.image.decode_jpeg(image_file)
-    image = 255.0 * tf.image.convert_image_dtype(image, tf.float32)
+    image = tf.placeholder(dtype=tf.float32)
     frame_sz = tf.shape(image)
+    print "Frame Size: {0}".format(image.get_shape())
 
     avg_chan = tf.reduce_mean(image, reduction_indices=(0,1), name='avg_chan')
     # pad with if necessary

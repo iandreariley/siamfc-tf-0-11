@@ -19,7 +19,7 @@ from src.visualization import show_frame, show_crops, show_scores
 # os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_device)
 
 # read default parameters and override with custom ones
-def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, filename, image, templates_z, scores, start_frame):
+def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, templates_z, scores, start_frame):
     num_frames = np.size(frame_name_list)
     # stores tracker's output for evaluation
     bboxes = np.zeros((num_frames,4))
@@ -59,11 +59,10 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
         bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
 
         first_img = _load_image(frame_name_list[0])
-        image_, templates_z_ = sess.run([image, templates_z], feed_dict={
-                                                                        siam.pos_x_ph: pos_x,
-                                                                        siam.pos_y_ph: pos_y,
-                                                                        siam.z_sz_ph: z_sz,
-                                                                        image: first_img})
+        templates_z_ = sess.run([templates_z], feed_dict={siam.pos_x_ph: pos_x,
+                                                          siam.pos_y_ph: pos_y,
+                                                          siam.z_sz_ph: z_sz,
+                                                          image: first_img})
         new_templates_z_ = templates_z_
 
         t_start = time.time()
@@ -77,7 +76,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
 
             # load image
 
-            image_, scores_ = sess.run(
+            scores_ = sess.run(
                 [image, scores],
                 feed_dict={
                     siam.pos_x_ph: pos_x,
@@ -108,21 +107,21 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             # convert <cx,cy,w,h> to <x,y,w,h> and save output
             bboxes[i,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
             # update the target representation with a rolling average
-            if hp.z_lr>0:
-                new_templates_z_ = sess.run([templates_z], feed_dict={
-                                                                siam.pos_x_ph: pos_x,
-                                                                siam.pos_y_ph: pos_y,
-                                                                siam.z_sz_ph: z_sz,
-                                                                image: image_
-                                                                })
+            # if hp.z_lr>0:
+            #     new_templates_z_ = sess.run([templates_z], feed_dict={
+            #                                                     siam.pos_x_ph: pos_x,
+            #                                                     siam.pos_y_ph: pos_y,
+            #                                                     siam.z_sz_ph: z_sz,
+            #                                                     image: image_
+            #                                                     })
 
                 templates_z_=(1-hp.z_lr)*np.asarray(templates_z_) + hp.z_lr*np.asarray(new_templates_z_)
 
             # update template patch size
             z_sz = (1-hp.scale_lr)*z_sz + hp.scale_lr*scaled_exemplar[new_scale_id]
 
-            if run.visualization:
-                show_frame(image_, bboxes[i,:], 1)
+            # if run.visualization:
+            #     show_frame(image_, bboxes[i,:], 1)
 
         t_elapsed = time.time() - t_start
         speed = num_frames/t_elapsed

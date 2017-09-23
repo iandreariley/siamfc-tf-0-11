@@ -29,7 +29,7 @@ _num_layers = len(_conv_stride)
 
 def build_tracking_graph(final_score_sz, design, env):
 
-    image = tf.placeholder(dtype=tf.float32)
+    image = tf.placeholder(dtype=tf.float32, name='image')
     frame_sz = tf.shape(image)
     print "Frame Size: {0}".format(image.get_shape())
 
@@ -84,19 +84,19 @@ def _create_siamese(net_path, net_x, net_z):
             bn_moving_variance = bn_moments[:,1]**2 # saved as std in matconvnet
         else:
             bn_beta = bn_gamma = bn_moving_mean = bn_moving_variance = []
-        
-        # set up conv "block" with bnorm and activation 
+
+        # set up conv "block" with bnorm and activation
         net_x = set_convolutional(net_x, conv_W, np.swapaxes(conv_b,0,1), _conv_stride[i], \
                             bn_beta, bn_gamma, bn_moving_mean, bn_moving_variance, \
                             filtergroup=_filtergroup_yn[i], batchnorm=_bnorm_yn[i], activation=_relu_yn[i], \
                             scope='conv'+str(i+1), reuse=False)
-        
+
         # notice reuse=True for Siamese parameters sharing
         net_z = set_convolutional(net_z, conv_W, np.swapaxes(conv_b,0,1), _conv_stride[i], \
                             bn_beta, bn_gamma, bn_moving_mean, bn_moving_variance, \
                             filtergroup=_filtergroup_yn[i], batchnorm=_bnorm_yn[i], activation=_relu_yn[i], \
                             scope='conv'+str(i+1), reuse=True)
-    
+
         # add max pool if required
         if _pool_stride[i]>0:
             print '\t\tMAX-POOL: size '+str(_pool_sz)+ ' and stride '+str(_pool_stride[i])
@@ -124,7 +124,7 @@ def _import_from_matconvnet(net_path):
 # find all parameters matching the codename (there should be only one)
 def _find_params(x, params):
     matching = [s for s in params if x in s]
-    assert len(matching)==1, ('Ambiguous param name found')    
+    assert len(matching)==1, ('Ambiguous param name found')
     return matching
 
 

@@ -19,7 +19,7 @@ from src.visualization import show_frame, show_crops, show_scores
 # os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_device)
 
 # read default parameters and override with custom ones
-def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, image, templates_z, scores, start_frame):
+def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, image, final_score_sz, templates_z, scores, start_frame):
     num_frames = np.size(frame_name_list)
     # stores tracker's output for evaluation
     bboxes = np.zeros((num_frames,4))
@@ -59,10 +59,11 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
         bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
 
         first_img = _load_image(frame_name_list[0])
-        templates_z_ = sess.run(templates_z, feed_dict={siam.pos_x_ph: pos_x,
-                                                          siam.pos_y_ph: pos_y,
-                                                          siam.z_sz_ph: z_sz,
-                                                          image: first_img})
+        templates_z_ = sess.run([templates_z], feed_dict={
+                                                                        siam.pos_x_ph: pos_x,
+                                                                        siam.pos_y_ph: pos_y,
+                                                                        siam.z_sz_ph: z_sz,
+                                                                        image: first_img})
         new_templates_z_ = templates_z_
 
         t_start = time.time()
@@ -75,9 +76,9 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             scaled_target_h = target_h * scale_factors
 
             # load image
-            img = _load_image(frame_name_list[i])
-            scores_ = sess.run(
-                scores,
+
+            image_, scores_ = sess.run(
+                [image, scores],
                 feed_dict={
                     siam.pos_x_ph: pos_x,
                     siam.pos_y_ph: pos_y,
@@ -85,7 +86,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
                     siam.x_sz1_ph: scaled_search_area[1],
                     siam.x_sz2_ph: scaled_search_area[2],
                     templates_z: np.squeeze(templates_z_),
-                    image: img
+                    image: _load_image(frame_name_list[i])
                 }, **run_opts)
             scores_ = np.squeeze(scores_)
             # penalize change of scale
@@ -120,8 +121,8 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             # update template patch size
             z_sz = (1-hp.scale_lr)*z_sz + hp.scale_lr*scaled_exemplar[new_scale_id]
 
-            if run.visualization:
-                show_frame(img, bboxes[i,:], 1)
+            # if run.visualization:
+            #     show_frame(image_, bboxes[i,:], 1)
 
         t_elapsed = time.time() - t_start
         speed = num_frames/t_elapsed
@@ -155,4 +156,4 @@ def _update_target_position(pos_x, pos_y, score, final_score_sz, tot_stride, sea
     return pos_x, pos_y
 
 def _load_image(img_filename):
-    return ndimage.imread(img_filename).astype(np.float32)
+    return ndimage.imread(img_filename)

@@ -46,7 +46,7 @@ def main():
                 pos_x, pos_y, target_w, target_h = region_to_bbox(gt_[0])
                 idx = i * evaluation.n_subseq + j
                 bboxes, speed[idx] = tracker(hp, run, design, frame_name_list_, pos_x, pos_y,
-                        target_w, target_h, final_score_sz, image, templates_z, scores, start_frame)
+                        target_w, target_h, image, final_score_sz, templates_z, scores, start_frame)
                 lengths[idx], precisions[idx], precisions_auc[idx], ious[idx] = _compile_results(gt_, bboxes, evaluation.dist_threshold)
                 print str(i) + ' -- ' + videos_list[i] + \
                 ' -- Precision: ' + "%.2f" % precisions[idx] + \
@@ -70,8 +70,8 @@ def main():
     else:
         gt, frame_name_list, _, _ = _init_video(env, evaluation, evaluation.video)
         pos_x, pos_y, target_w, target_h = region_to_bbox(gt[evaluation.start_frame])
-        bboxes, speed = tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz,
-                                image, templates_z, scores, evaluation.start_frame)
+        bboxes, speed = tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, image, final_score_sz,
+                                templates_z, scores, evaluation.start_frame)
         _, precision, precision_auc, iou = _compile_results(gt, bboxes, evaluation.dist_threshold)
         print evaluation.video + \
               ' -- Precision ' + "(%d px)" % evaluation.dist_threshold + ': ' + "%.2f" % precision +\

@@ -5,3 +5,4 @@ pretrained/
 *.swp
 notebooks/*
 .idea
+cfnet_networks

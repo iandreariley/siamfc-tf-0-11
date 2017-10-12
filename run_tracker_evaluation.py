@@ -2,6 +2,10 @@ from __future__ import division
 import sys
 import os
 import numpy as np
+import pickle
+import collections
+from evaluation import TrackingResults
+from evaluation import BboxFormats
 from PIL import Image
 import src.siamese as siam
 from src.tracker import tracker
@@ -29,31 +33,32 @@ def main():
         videos_list = [v for v in os.listdir(dataset_folder)]
         videos_list.sort()
         nv = np.size(videos_list)
-        speed = np.zeros(nv * evaluation.n_subseq)
-        precisions = np.zeros(nv * evaluation.n_subseq)
-        precisions_auc = np.zeros(nv * evaluation.n_subseq)
-        ious = np.zeros(nv * evaluation.n_subseq)
-        lengths = np.zeros(nv * evaluation.n_subseq)
+        print nv
+        speed = np.zeros(nv)
+        precisions = np.zeros(nv)
+        precisions_auc = np.zeros(nv)
+        ious = np.zeros(nv)
+        lengths = np.zeros(nv)
         for i in range(nv):
+            if not os.path.isdir(os.path.join(env.root_dataset, evaluation.dataset, videos_list[i])):
+                print i
+                continue
             gt, frame_name_list, frame_sz, n_frames = _init_video(env, evaluation, videos_list[i])
-            starts = np.rint(np.linspace(0, n_frames - 1, evaluation.n_subseq + 1))
-            starts = starts[0:evaluation.n_subseq]
-            for j in range(evaluation.n_subseq):
-                start_frame = int(starts[j])
-                gt_ = gt[start_frame:, :]
-                frame_name_list_ = frame_name_list[start_frame:]
-                pos_x, pos_y, target_w, target_h = region_to_bbox(gt_[0])
-                idx = i * evaluation.n_subseq + j
-                bboxes, speed[idx] = tracker(hp, run, design, frame_name_list_, pos_x, pos_y,
-                                                                     target_w, target_h, final_score_sz, filename,
-                                                                     image, templates_z, scores, start_frame)
-                lengths[idx], precisions[idx], precisions_auc[idx], ious[idx] = _compile_results(gt_, bboxes, evaluation.dist_threshold)
-                print str(i) + ' -- ' + videos_list[i] + \
-                ' -- Precision: ' + "%.2f" % precisions[idx] + \
-                ' -- Precisions AUC: ' + "%.2f" % precisions_auc[idx] + \
-                ' -- IOU: ' + "%.2f" % ious[idx] + \
-                ' -- Speed: ' + "%.2f" % speed[idx] + ' --'
-                print
+            pos_x, pos_y, target_w, target_h = region_to_bbox(gt[0])
+            bboxes, speed[i] = tracker(hp, run, design, frame_name_list, pos_x, pos_y,
+                                                                 target_w, target_h, final_score_sz, filename,
+                                                                 image, templates_z, scores, start_frame)
+            lengths[i], precisions[i], precisions_auc[i], ious[i] = _compile_results(gt, bboxes, evaluation.dist_threshold)
+            pred = collections.OrderedDict(zip(frame_name_list, bboxes))
+            init_pos = (pos_x, pos_y, target_w, target_h)
+            res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt, BboxFormats.CCWH)
+            res.save(os.path.join("all_results", videos_list[i] + "_results.p"))
+            print str(i) + ' -- ' + videos_list[i] + \
+            ' -- Precision: ' + "%.2f" % precisions[i] + \
+            ' -- Precisions AUC: ' + "%.2f" % precisions_auc[i] + \
+            ' -- IOU: ' + "%.2f" % ious[i] + \
+            ' -- Speed: ' + "%.2f" % speed[i] + ' --'
+            print
 
         tot_frames = np.sum(lengths)
         mean_precision = np.sum(precisions * lengths) / tot_frames
@@ -106,7 +111,7 @@ def _compile_results(gt, bboxes, dist_threshold):
         precisions_ths[i] = sum(new_distances < thresholds[i])/np.size(new_distances)
 
     # integrate over the thresholds
-    precision_auc = np.trapz(precisions_ths)    
+    precision_auc = np.trapz(precisions_ths)
 
     # per frame averaged intersection over union (OTB metric)
     iou = np.mean(new_ious) * 100

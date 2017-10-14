@@ -19,8 +19,8 @@ def _rect(region, center):
         y = region[1]
         w = region[2]
         h = region[3]
-        cx = x+w/2
-        cy = y+h/2
+        cx = x + w / 2
+        cy = y + h / 2
         return cx, cy, w, h
     else:
         return region

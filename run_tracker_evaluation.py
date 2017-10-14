@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pickle
 import collections
+import logging
 from evaluation import TrackingResults
 from evaluation import BboxFormats
 from PIL import Image
@@ -14,6 +15,8 @@ from src.region_to_bbox import region_to_bbox
 
 
 def main():
+    # set log level
+    logging.basicConfig(level=logging.INFO)
     # avoid printing TF debugging information
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     # TODO: allow parameters from command line or leave everything in json files?
@@ -40,25 +43,36 @@ def main():
         ious = np.zeros(nv)
         lengths = np.zeros(nv)
         for i in range(nv):
+            logging.info("Starting evaluation of video {0}.".format(videos_list[i]))
             if not os.path.isdir(os.path.join(env.root_dataset, evaluation.dataset, videos_list[i])):
-                print i
+                logging.info("Path {0} is not a directory. Ignoring.".format(videos_list[i]))
                 continue
-            gt, frame_name_list, frame_sz, n_frames = _init_video(env, evaluation, videos_list[i])
-            pos_x, pos_y, target_w, target_h = region_to_bbox(gt[0])
-            bboxes, speed[i] = tracker(hp, run, design, frame_name_list, pos_x, pos_y,
-                                                                 target_w, target_h, final_score_sz, filename,
-                                                                 image, templates_z, scores, start_frame)
-            lengths[i], precisions[i], precisions_auc[i], ious[i] = _compile_results(gt, bboxes, evaluation.dist_threshold)
-            pred = collections.OrderedDict(zip(frame_name_list, bboxes))
-            init_pos = (pos_x, pos_y, target_w, target_h)
-            res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt, BboxFormats.CCWH)
-            res.save(os.path.join("all_results", videos_list[i] + "_results.p"))
-            print str(i) + ' -- ' + videos_list[i] + \
-            ' -- Precision: ' + "%.2f" % precisions[i] + \
-            ' -- Precisions AUC: ' + "%.2f" % precisions_auc[i] + \
-            ' -- IOU: ' + "%.2f" % ious[i] + \
-            ' -- Speed: ' + "%.2f" % speed[i] + ' --'
-            print
+
+            results_path = os.path.join("all_results", videos_list[i] + "_results.p")
+            if os.path.exists(results_path):
+                logging.info("Results exist for video {0}. Skipping.".format(videos_list[i]))
+                continue
+
+            try:
+                gt, frame_name_list, frame_sz, n_frames = _init_video(env, evaluation, videos_list[i])
+                pos_x, pos_y, target_w, target_h = region_to_bbox(gt[0])
+                start_frame = 0
+                bboxes, speed[i] = tracker(hp, run, design, frame_name_list, pos_x, pos_y,
+                                                                     target_w, target_h, final_score_sz, filename,
+                                                                     image, templates_z, scores, start_frame)
+                lengths[i], precisions[i], precisions_auc[i], ious[i] = _compile_results(gt, bboxes, evaluation.dist_threshold)
+                pred = collections.OrderedDict(zip(frame_name_list, bboxes))
+                init_pos = (pos_x, pos_y, target_w, target_h)
+                res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt, BboxFormats.CCWH)
+                res.save(results_path)
+                print str(i) + ' -- ' + videos_list[i] + \
+                ' -- Precision: ' + "%.2f" % precisions[i] + \
+                ' -- Precisions AUC: ' + "%.2f" % precisions_auc[i] + \
+                ' -- IOU: ' + "%.2f" % ious[i] + \
+                ' -- Speed: ' + "%.2f" % speed[i] + ' --'
+                print
+            except Exception as e:
+                logging.warn("Tracking of video {0} threw the following exception: {1}".format(videos_list[i], e))
 
         tot_frames = np.sum(lengths)
         mean_precision = np.sum(precisions * lengths) / tot_frames

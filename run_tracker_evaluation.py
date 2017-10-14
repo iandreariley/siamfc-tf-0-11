@@ -60,10 +60,10 @@ def main():
                 bboxes, speed[i] = tracker(hp, run, design, frame_name_list, pos_x, pos_y,
                                                                      target_w, target_h, final_score_sz, filename,
                                                                      image, templates_z, scores, start_frame)
-                lengths[i], precisions[i], precisions_auc[i], ious[i] = _compile_results(gt, bboxes, evaluation.dist_threshold)
+                lengths[i], precisions[i], precisions_auc[i], ious[i], gt_bboxes = _compile_results(gt, bboxes, evaluation.dist_threshold)
                 pred = collections.OrderedDict(zip(frame_name_list, bboxes))
                 init_pos = (pos_x, pos_y, target_w, target_h)
-                res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt, BboxFormats.CCWH)
+                res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt_bboxes, BboxFormats.CCWH)
                 res.save(results_path)
                 print str(i) + ' -- ' + videos_list[i] + \
                 ' -- Precision: ' + "%.2f" % precisions[i] + \
@@ -130,7 +130,7 @@ def _compile_results(gt, bboxes, dist_threshold):
     # per frame averaged intersection over union (OTB metric)
     iou = np.mean(new_ious) * 100
 
-    return l, precision, precision_auc, iou
+    return l, precision, precision_auc, iou, gt4
 
 
 def _init_video(env, evaluation, video):

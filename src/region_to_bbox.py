@@ -2,6 +2,18 @@ import numpy as np
 
 
 def region_to_bbox(region, center=True):
+    """Take a quadrangle region, and return a bounding box.
+
+    Args:
+        region (4- or 8-tuple of floats): Either a bounding box of the form (x, y, w, h) where x, y are the coordinates
+         of the upper left corner of the bounding box, or a quadrangle defined by the corners (x1, y1, ..., x4, y4).
+        center (boolean): If true, bounding box is returned in (x, y, w, h) format, otherwise, it is returned in
+        (cx, cy, w, h) format, where cx, and cy are the coordinates of the center of the bounding box, not its top-left
+        corner.
+
+    Returns:
+        (int, int, int, int): Bounding box in either (x, y, w, h) format for (cx, cy, w, h) format.
+    """
 
     n = len(region)
     assert n == 4 or n == 8, 'GT region format is invalid, should have 4 or 8 entries.'

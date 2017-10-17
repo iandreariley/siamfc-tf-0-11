@@ -32,22 +32,8 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
     context = design.context*(target_w+target_h)
     z_sz = np.sqrt(np.prod((target_w+context)*(target_h+context)))
     x_sz = float(design.search_sz) / design.exemplar_sz * z_sz
-
-    # thresholds to saturate patches shrinking/growing
-    min_z = hp.scale_min * z_sz
-    max_z = hp.scale_max * z_sz
-    min_x = hp.scale_min * x_sz
-    max_x = hp.scale_max * x_sz
-
-    # run_metadata = tf.RunMetadata()
-    # run_opts = {
-    #     'options': tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-    #     'run_metadata': run_metadata,
-    # }
-
     run_opts = {}
 
-    # with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
     with tf.Session() as sess:
         tf.initialize_all_variables().run()
         # Coordinate the loading of image files.
@@ -62,7 +48,6 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
                                                                         siam.pos_y_ph: pos_y,
                                                                         siam.z_sz_ph: z_sz,
                                                                         filename: frame_name_list[0]})
-        new_templates_z_ = templates_z_
 
         t_start = time.time()
 
@@ -125,11 +110,6 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
         # Finish off the filename queue coordinator.
         coord.request_stop()
         coord.join(threads) 
-
-        # from tensorflow.python.client import timeline
-        # trace = timeline.Timeline(step_stats=run_metadata.step_stats)
-        # trace_file = open('timeline-search.ctf.json', 'w')
-        # trace_file.write(trace.generate_chrome_trace_format())
 
     plt.close('all')
 

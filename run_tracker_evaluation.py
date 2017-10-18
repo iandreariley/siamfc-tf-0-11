@@ -91,7 +91,7 @@ def main():
         pos_x, pos_y, target_w, target_h = region_to_bbox(gt[evaluation.start_frame])
         bboxes, speed = tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz,
                                 filename, image, templates_z, scores, evaluation.start_frame)
-        _, precision, precision_auc, iou = _compile_results(gt, bboxes, evaluation.dist_threshold)
+        _, precision, precision_auc, iou, _ = _compile_results(gt, bboxes, evaluation.dist_threshold)
         print evaluation.video + \
               ' -- Precision ' + "(%d px)" % evaluation.dist_threshold + ': ' + "%.2f" % precision +\
               ' -- Precision AUC: ' + "%.2f" % precision_auc + \

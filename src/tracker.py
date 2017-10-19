@@ -9,7 +9,7 @@ import csv
 import numpy as np
 from PIL import Image
 import time
-import cv2
+import scipy.ndimage as ndimage
 
 import src.siamese as siam
 from src.visualization import show_frame, show_crops, show_scores
@@ -41,7 +41,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
 
         # save first frame position (from ground-truth)
         bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
-        image_ = cv2.imread(frame_name_list[0])
+        image_ = ndimage.imread(frame_name_list[0])
         templates_z_ = sess.run([templates_z], feed_dict={
                                                                         siam.pos_x_ph: pos_x,
                                                                         siam.pos_y_ph: pos_y,

@@ -9,6 +9,7 @@ import csv
 import numpy as np
 from PIL import Image
 import time
+import cv2
 
 import src.siamese as siam
 from src.visualization import show_frame, show_crops, show_scores
@@ -16,7 +17,7 @@ from src.visualization import show_frame, show_crops, show_scores
 
 
 # read default parameters and override with custom ones
-def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, filename, image, templates_z, scores, start_frame):
+def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz, image, templates_z, scores, start_frame):
     num_frames = np.size(frame_name_list)
     # stores tracker's output for evaluation
     bboxes = np.zeros((num_frames,4))
@@ -40,12 +41,12 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
 
         # save first frame position (from ground-truth)
         bboxes[0,:] = pos_x-target_w/2, pos_y-target_h/2, target_w, target_h
-
-        image_, templates_z_ = sess.run([image, templates_z], feed_dict={
+        image_ = cv2.imread(frame_name_list[0])
+        templates_z_ = sess.run([templates_z], feed_dict={
                                                                         siam.pos_x_ph: pos_x,
                                                                         siam.pos_y_ph: pos_y,
                                                                         siam.z_sz_ph: z_sz,
-                                                                        filename: frame_name_list[0]})
+                                                                        image: image_})
 
         t_start = time.time()
 
@@ -55,8 +56,9 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
             scaled_search_area = x_sz * scale_factors
             scaled_target_w = target_w * scale_factors
             scaled_target_h = target_h * scale_factors
-            image_, scores_ = sess.run(
-                [image, scores],
+            image_ = cv2.imread(frame_name_list[i])[:,:,::-1]
+            scores_ = sess.run(
+                [scores],
                 feed_dict={
                     siam.pos_x_ph: pos_x,
                     siam.pos_y_ph: pos_y,
@@ -64,7 +66,7 @@ def tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, 
                     siam.x_sz1_ph: scaled_search_area[1],
                     siam.x_sz2_ph: scaled_search_area[2],
                     templates_z: np.squeeze(templates_z_),
-                    filename: frame_name_list[i],
+                    image: image_,
                 }, **run_opts)
             scores_ = np.squeeze(scores_)
             # penalize change of scale

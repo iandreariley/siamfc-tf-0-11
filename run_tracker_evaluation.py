@@ -28,7 +28,7 @@ def main():
     # [1 4 7] => [1 1 2 3 4 5 6 7 7]  (length 3*3)
     final_score_sz = hp.response_up * (design.score_sz - 1) + 1
     # build TF graph once for all
-    filename, image, templates_z, scores = siam.build_tracking_graph(final_score_sz, design, env)
+    image, templates_z, scores = siam.build_tracking_graph(final_score_sz, design, env)
 
     # iterate through all videos of evaluation.dataset
     if evaluation.video == 'all':
@@ -42,14 +42,17 @@ def main():
         precisions_auc = np.zeros(nv)
         ious = np.zeros(nv)
         lengths = np.zeros(nv)
+        results_dir = 'all_results_w_image_load'
+        if not os.path.exists(results_dir):
+            os.mkdir(results_dir)
         for i in range(nv):
             logging.info("Starting evaluation of video {0}.".format(videos_list[i]))
             if not os.path.isdir(os.path.join(env.root_dataset, evaluation.dataset, videos_list[i])):
                 logging.info("Path {0} is not a directory. Ignoring.".format(videos_list[i]))
                 continue
 
-            results_path = os.path.join("all_results", videos_list[i] + "_results.p")
-            if os.path.exists(results_path):
+            results_file = os.path.join(results_dir, videos_list[i] + "_results.p")
+            if os.path.exists(results_file):
                 logging.info("Results exist for video {0}. Skipping.".format(videos_list[i]))
                 continue
 
@@ -58,13 +61,13 @@ def main():
                 pos_x, pos_y, target_w, target_h = region_to_bbox(gt[0])
                 start_frame = 0
                 bboxes, speed[i] = tracker(hp, run, design, frame_name_list, pos_x, pos_y,
-                                                                     target_w, target_h, final_score_sz, filename,
+                                                                     target_w, target_h, final_score_sz,
                                                                      image, templates_z, scores, start_frame)
                 lengths[i], precisions[i], precisions_auc[i], ious[i], gt_bboxes = _compile_results(gt, bboxes, evaluation.dist_threshold)
                 pred = collections.OrderedDict(zip(frame_name_list, bboxes))
                 init_pos = (pos_x, pos_y, target_w, target_h)
                 res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt_bboxes, BboxFormats.CCWH)
-                res.save(results_path)
+                res.save(results_file)
                 print str(i) + ' -- ' + videos_list[i] + \
                 ' -- Precision: ' + "%.2f" % precisions[i] + \
                 ' -- Precisions AUC: ' + "%.2f" % precisions_auc[i] + \
@@ -90,7 +93,7 @@ def main():
         gt, frame_name_list, _, _ = _init_video(env, evaluation, evaluation.video)
         pos_x, pos_y, target_w, target_h = region_to_bbox(gt[evaluation.start_frame])
         bboxes, speed = tracker(hp, run, design, frame_name_list, pos_x, pos_y, target_w, target_h, final_score_sz,
-                                filename, image, templates_z, scores, evaluation.start_frame)
+                                image, templates_z, scores, evaluation.start_frame)
         _, precision, precision_auc, iou, _ = _compile_results(gt, bboxes, evaluation.dist_threshold)
         print evaluation.video + \
               ' -- Precision ' + "(%d px)" % evaluation.dist_threshold + ': ' + "%.2f" % precision +\

@@ -9,7 +9,7 @@ from evaluation import TrackingResults
 from evaluation import BboxFormats
 from PIL import Image
 import src.siamese as siam
-from src.tracker import tracker
+from src.tracker import Tracker
 from src.parse_arguments import parse_arguments
 from src.region_to_bbox import region_to_bbox
 
@@ -58,15 +58,12 @@ def main():
 
             try:
                 gt, frame_name_list, frame_sz, n_frames = _init_video(env, evaluation, videos_list[i])
-                pos_x, pos_y, target_w, target_h = region_to_bbox(gt[0])
-                start_frame = 0
-                bboxes, speed[i] = tracker(hp, run, design, frame_name_list, pos_x, pos_y,
-                                                                     target_w, target_h, final_score_sz,
-                                                                     image, templates_z, scores, start_frame)
+                bbox = region_to_bbox(gt[0])
+                tracker = Tracker(hp, run, design, frame_name_list, bbox, image, templates_z, scores)
+                bboxes, speed[i] = tracker.track()
                 lengths[i], precisions[i], precisions_auc[i], ious[i], gt_bboxes = _compile_results(gt, bboxes, evaluation.dist_threshold)
                 pred = collections.OrderedDict(zip(frame_name_list, bboxes))
-                init_pos = (pos_x, pos_y, target_w, target_h)
-                res = TrackingResults(pred, init_pos, lengths[i] / speed[i], gt_bboxes, BboxFormats.CCWH)
+                res = TrackingResults(pred, bbox, lengths[i] / speed[i], gt_bboxes, BboxFormats.CCWH)
                 res.save(results_file)
                 print str(i) + ' -- ' + videos_list[i] + \
                 ' -- Precision: ' + "%.2f" % precisions[i] + \

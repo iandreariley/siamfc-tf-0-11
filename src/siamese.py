@@ -3,6 +3,7 @@ import numpy as np
 import scipy.io
 import sys
 import os.path
+from region_to_bbox import region_to_bbox
 from src.convolutional import set_convolutional
 from src.crops import extract_crops_z, extract_crops_x, pad_frame, resize_images
 sys.path.append('../')
@@ -53,7 +54,7 @@ class SiameseNetwork:
         tf.initialize_all_variables().run(session=self.sess)
 
     def set_target(self, image, bbox):
-        self.pos_x, self.pos_y, self.target_w, self.target_h = bbox
+        self.pos_x, self.pos_y, self.target_w, self.target_h = region_to_bbox(bbox, center=True)
         context = self.design.context*(self.target_w + self.target_h)
         self.z_sz = np.sqrt(np.prod((self.target_w + context) * (self.target_h + context)))
         self.x_sz = float(self.design.search_sz) / self.design.exemplar_sz * self.z_sz
@@ -102,7 +103,10 @@ class SiameseNetwork:
         # update template patch size
         self.z_sz = (1-self.hp.scale_lr) * self.z_sz + self.hp.scale_lr * scaled_exemplar[new_scale_id]
 
-        return self.pos_x, self.pos_y, self.target_w, self.target_h
+        return self._get_bbox()
+
+    def _get_bbox(self):
+        return self.pos_x - self.target_w / 2, self.pos_y - self.target_h / 2, self.target_w, self.target_h
 
     def _update_target_position(self, score):
         # find location of score maximizer

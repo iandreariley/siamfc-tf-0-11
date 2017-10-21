@@ -14,6 +14,7 @@ import scipy.ndimage as ndimage
 
 import src.siamese as siam
 from src.visualization import show_frame, show_crops, show_scores
+from src.region_to_bbox import region_to_bbox
 
 
 class Tracker:
@@ -26,7 +27,7 @@ class Tracker:
         self.design = design
         self.detector = detector
         self.final_score_sz = hp.response_up * (design.score_sz - 1) + 1
-        self.pos_x, self.pos_y, self.target_w, self.target_h = bbox
+        self.bbox = bbox
 
     def track(self):
         num_frames = np.size(self.frame_name_list)
@@ -35,18 +36,16 @@ class Tracker:
 
 
         # save first frame position (from ground-truth)
-        bboxes[0,:] = self.pos_x - self.target_w/2, self.pos_y - self.target_h/2, self.target_w, self.target_h
+        bboxes[0,:] = self.bbox
         image_ = ndimage.imread(self.frame_name_list[0])
-        self.detector.set_target(image_, (self.pos_x, self.pos_y, self.target_w, self.target_h))
+        self.detector.set_target(image_, self.bbox)
 
         t_start = time.time()
 
         # Get an image from the queue
         for i in range(1, num_frames):
             image_ = ndimage.imread(self.frame_name_list[i])
-            self.pos_x, self.pos_y, self.target_w, self.target_h = self.detector.detect(image_)
-            # convert <cx,cy,w,h> to <x,y,w,h>
-            bboxes[i, :] = self.pos_x - self.target_w / 2, self.pos_y - self.target_h / 2, self.target_w, self.target_h
+            bboxes[i, :] = self.detector.detect(image_)
 
             if self.run.visualization:
                 show_frame(image_, bboxes[i, :], 1)

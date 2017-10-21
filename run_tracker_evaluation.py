@@ -58,7 +58,7 @@ def main():
 
             try:
                 gt, frame_name_list, frame_sz, n_frames = _init_video(env, evaluation, videos_list[i])
-                bbox = region_to_bbox(gt[0])
+                bbox = region_to_bbox(gt[0], center=False)
                 tracker = Tracker(hp, run, design, frame_name_list, bbox, detector)
                 bboxes, speed[i] = tracker.track()
                 lengths[i], precisions[i], precisions_auc[i], ious[i], gt_bboxes = _compile_results(gt, bboxes, evaluation.dist_threshold)
@@ -88,7 +88,7 @@ def main():
 
     else:
         gt, frame_name_list, _, _ = _init_video(env, evaluation, evaluation.video)
-        bbox = region_to_bbox(gt[evaluation.start_frame])
+        bbox = region_to_bbox(gt[evaluation.start_frame], center=False)
         tracker = Tracker(hp, run, design, frame_name_list, bbox, detector)
         bboxes, speed = tracker.track()
         _, precision, precision_auc, iou, _ = _compile_results(gt, bboxes, evaluation.dist_threshold)

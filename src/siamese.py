@@ -30,22 +30,92 @@ _num_layers = len(_conv_stride)
 class SiameseNetwork:
     """Siamese network for object detection."""
 
-    def __init__(self, hp, design, env):
+    def __init__(self, hp, design, env, run_opts = None):
         self.hp = hp
         self.design = design
         self.env = env
         self.final_score_sz = hp.response_up * (design.score_sz - 1) + 1
         self.image, self.templates_z, self.scores = self._build_tracking_graph()
+        self.run_opts = {} if run_opts is None else run_opts
+        self.templates_z_ = None
+        self.z_sz = None
+        self.x_sz = None
+        self.pos_x = None
+        self.pos_y = None
+        self.target_w = None
+        self.target_h = None
+        # TODO: Clarify scale_factors calculation.
+        self.scale_factors = self.hp.scale_step**np.linspace(-np.ceil(self.hp.scale_num/2), np.ceil(self.hp.scale_num/2), self.hp.scale_num)
+        hann_1d = np.expand_dims(np.hanning(self.final_score_sz), axis=0)
+        penalty = np.transpose(hann_1d) * hann_1d
+        self.penalty = penalty / np.sum(penalty)
         self.sess = tf.Session()
         tf.initialize_all_variables().run(session=self.sess)
 
-    def get_template(self, image, pos_x, pos_y, z_sz):
+    def set_target(self, image, bbox):
+        self.pos_x, self.pos_y, self.target_w, self.target_h = bbox
+        context = self.design.context*(self.target_w + self.target_h)
+        self.z_sz = np.sqrt(np.prod((self.target_w + context) * (self.target_h + context)))
+        self.x_sz = float(self.design.search_sz) / self.design.exemplar_sz * self.z_sz
+        self.templates_z_ = self.get_template(image)
+
+    def get_template(self, image):
         return self.sess.run(self.templates_z, feed_dict={
-            pos_x_ph: pos_x,
-            pos_y_ph: pos_y,
-            z_sz_ph: z_sz,
+            pos_x_ph: self.pos_x,
+            pos_y_ph: self.pos_y,
+            z_sz_ph: self.z_sz,
             self.image: image
         })
+
+    def detect(self, image):
+        if self.templates_z_ is None:
+            raise ValueError("SiameseNetwork.set_target must be called before any calls to SiameseNetwork.detect!")
+
+        scaled_exemplar = self.z_sz * self.scale_factors
+        scaled_search_area = self.x_sz * self.scale_factors
+        scaled_target_w = self.target_w * self.scale_factors
+        scaled_target_h = self.target_h * self.scale_factors
+        scores_ = self.get_scores(image, self.pos_x, self.pos_y, scaled_search_area,
+                                  np.squeeze(self.templates_z_), self.run_opts)
+        scores_ = np.squeeze(scores_)
+        # penalize change of scale
+        scores_[0,:,:] = self.hp.scale_penalty*scores_[0,:,:]
+        scores_[2,:,:] = self.hp.scale_penalty*scores_[2,:,:]
+        # find scale with highest peak (after penalty)
+        new_scale_id = np.argmax(np.amax(scores_, axis=(1,2)))
+        # update scaled sizes
+        self.x_sz = (1-self.hp.scale_lr)*self.x_sz + self.hp.scale_lr*scaled_search_area[new_scale_id]
+        self.target_w = (1-self.hp.scale_lr) * self.target_w + self.hp.scale_lr*scaled_target_w[new_scale_id]
+        self.target_h = (1-self.hp.scale_lr) * self.target_h + self.hp.scale_lr*scaled_target_h[new_scale_id]
+        # select response with new_scale_id
+        score_ = scores_[new_scale_id,:,:]
+        score_ = score_ - np.min(score_)
+        score_ = score_/np.sum(score_)
+        # apply displacement penalty
+        score_ = (1-self.hp.window_influence) * score_ + self.hp.window_influence * self.penalty
+        self._update_target_position(score_)
+        # update the target representation with a rolling average
+        if self.hp.z_lr > 0:
+            new_templates_z_ = self.get_template(image)
+            self.templates_z_=(1-self.hp.z_lr) * np.asarray(self.templates_z_) + self.hp.z_lr * np.asarray(new_templates_z_)
+
+        # update template patch size
+        self.z_sz = (1-self.hp.scale_lr) * self.z_sz + self.hp.scale_lr * scaled_exemplar[new_scale_id]
+
+        return self.pos_x, self.pos_y, self.target_w, self.target_h
+
+    def _update_target_position(self, score):
+        # find location of score maximizer
+        p = np.asarray(np.unravel_index(np.argmax(score), np.shape(score)))
+        # displacement from the center in search area final representation ...
+        center = float(self.final_score_sz - 1) / 2
+        disp_in_area = p - center
+        # displacement from the center in instance crop
+        disp_in_xcrop = disp_in_area * float(self.design.tot_stride) / self.hp.response_up
+        # displacement from the center in instance crop (in frame coordinates)
+        disp_in_frame = disp_in_xcrop *  self.x_sz / self.design.search_sz
+        # *position* within frame in frame coordinates
+        self.pos_y, self.pos_x = self.pos_y + disp_in_frame[0], self.pos_x + disp_in_frame[1]
 
     def get_scores(self, image, pos_x, pos_y, scaled_search_area, template, run_opts):
         return self.sess.run([self.scores], feed_dict={

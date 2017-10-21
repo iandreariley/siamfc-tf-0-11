@@ -18,15 +18,13 @@ from src.visualization import show_frame, show_crops, show_scores
 
 class Tracker:
 
-    def __init__(self, hp, run, design, frame_name_list, bbox, image, templates_z, scores, start_frame=0):
+    def __init__(self, hp, run, design, frame_name_list, bbox, detector, start_frame=0):
 
         self.frame_name_list = frame_name_list[start_frame:]
         self.hp = hp
         self.run = run
         self.design = design
-        self.image = image
-        self.templates_z = templates_z
-        self.scores = scores
+        self.detector = detector
         self.final_score_sz = hp.response_up * (design.score_sz - 1) + 1
         self.pos_x, self.pos_y, self.target_w, self.target_h = bbox
 
@@ -46,83 +44,54 @@ class Tracker:
         x_sz = float(self.design.search_sz) / self.design.exemplar_sz * z_sz
         run_opts = {}
 
-        with tf.Session() as sess:
-            tf.initialize_all_variables().run()
-            # Coordinate the loading of image files.
-            coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coord)
+        # save first frame position (from ground-truth)
+        bboxes[0,:] = self.pos_x - self.target_w/2, self.pos_y - self.target_h/2, self.target_w, self.target_h
+        image_ = ndimage.imread(self.frame_name_list[0])
+        templates_z_ = self.detector.get_template(image_, self.pos_x, self.pos_y, z_sz)
 
-            # save first frame position (from ground-truth)
-            bboxes[0,:] = self.pos_x - self.target_w/2, self.pos_y - self.target_h/2, self.target_w, self.target_h
-            image_ = ndimage.imread(self.frame_name_list[0])
-            templates_z_ = sess.run([self.templates_z], feed_dict={
-                siam.pos_x_ph: self.pos_x,
-                siam.pos_y_ph: self.pos_y,
-                siam.z_sz_ph: z_sz,
-                self.image: image_})
+        t_start = time.time()
 
-            t_start = time.time()
+        # Get an image from the queue
+        for i in range(1, num_frames):
+            scaled_exemplar = z_sz * scale_factors
+            scaled_search_area = x_sz * scale_factors
+            scaled_target_w = self.target_w * scale_factors
+            scaled_target_h = self.target_h * scale_factors
+            image_ = ndimage.imread(self.frame_name_list[i])
+            scores_ = self.detector.get_scores(image_, self.pos_x, self.pos_y, scaled_search_area,
+                                               np.squeeze(templates_z_), run_opts)
+            scores_ = np.squeeze(scores_)
+            # penalize change of scale
+            scores_[0,:,:] = self.hp.scale_penalty*scores_[0,:,:]
+            scores_[2,:,:] = self.hp.scale_penalty*scores_[2,:,:]
+            # find scale with highest peak (after penalty)
+            new_scale_id = np.argmax(np.amax(scores_, axis=(1,2)))
+            # update scaled sizes
+            x_sz = (1-self.hp.scale_lr)*x_sz + self.hp.scale_lr*scaled_search_area[new_scale_id]
+            target_w = (1-self.hp.scale_lr)*self.target_w + self.hp.scale_lr*scaled_target_w[new_scale_id]
+            target_h = (1-self.hp.scale_lr)*self.target_h + self.hp.scale_lr*scaled_target_h[new_scale_id]
+            # select response with new_scale_id
+            score_ = scores_[new_scale_id,:,:]
+            score_ = score_ - np.min(score_)
+            score_ = score_/np.sum(score_)
+            # apply displacement penalty
+            score_ = (1-self.hp.window_influence)*score_ + self.hp.window_influence*penalty
+            self.pos_x, self.pos_y = _update_target_position(self.pos_x, self.pos_y, score_, self.final_score_sz, self.design.tot_stride, self.design.search_sz, self.hp.response_up, x_sz)
+            # convert <cx,cy,w,h> to <x,y,w,h> and save output
+            bboxes[i,:] = self.pos_x-target_w/2, self.pos_y-target_h/2, target_w, target_h
+            # update the target representation with a rolling average
+            if self.hp.z_lr>0:
+                new_templates_z_ = self.detector.get_template(image_, self.pos_x, self.pos_y, z_sz)
+                templates_z_=(1-self.hp.z_lr)*np.asarray(templates_z_) + self.hp.z_lr*np.asarray(new_templates_z_)
 
-            # Get an image from the queue
-            for i in range(1, num_frames):
-                scaled_exemplar = z_sz * scale_factors
-                scaled_search_area = x_sz * scale_factors
-                scaled_target_w = self.target_w * scale_factors
-                scaled_target_h = self.target_h * scale_factors
-                image_ = ndimage.imread(self.frame_name_list[i])
-                scores_ = sess.run(
-                    [self.scores],
-                    feed_dict={
-                        siam.pos_x_ph: self.pos_x,
-                        siam.pos_y_ph: self.pos_y,
-                        siam.x_sz0_ph: scaled_search_area[0],
-                        siam.x_sz1_ph: scaled_search_area[1],
-                        siam.x_sz2_ph: scaled_search_area[2],
-                        self.templates_z: np.squeeze(templates_z_),
-                        self.image: image_,
-                    }, **run_opts)
-                scores_ = np.squeeze(scores_)
-                # penalize change of scale
-                scores_[0,:,:] = self.hp.scale_penalty*scores_[0,:,:]
-                scores_[2,:,:] = self.hp.scale_penalty*scores_[2,:,:]
-                # find scale with highest peak (after penalty)
-                new_scale_id = np.argmax(np.amax(scores_, axis=(1,2)))
-                # update scaled sizes
-                x_sz = (1-self.hp.scale_lr)*x_sz + self.hp.scale_lr*scaled_search_area[new_scale_id]
-                target_w = (1-self.hp.scale_lr)*self.target_w + self.hp.scale_lr*scaled_target_w[new_scale_id]
-                target_h = (1-self.hp.scale_lr)*self.target_h + self.hp.scale_lr*scaled_target_h[new_scale_id]
-                # select response with new_scale_id
-                score_ = scores_[new_scale_id,:,:]
-                score_ = score_ - np.min(score_)
-                score_ = score_/np.sum(score_)
-                # apply displacement penalty
-                score_ = (1-self.hp.window_influence)*score_ + self.hp.window_influence*penalty
-                self.pos_x, self.pos_y = _update_target_position(self.pos_x, self.pos_y, score_, self.final_score_sz, self.design.tot_stride, self.design.search_sz, self.hp.response_up, x_sz)
-                # convert <cx,cy,w,h> to <x,y,w,h> and save output
-                bboxes[i,:] = self.pos_x-target_w/2, self.pos_y-target_h/2, target_w, target_h
-                # update the target representation with a rolling average
-                if self.hp.z_lr>0:
-                    new_templates_z_ = sess.run([self.templates_z], feed_dict={
-                        siam.pos_x_ph: self.pos_x,
-                        siam.pos_y_ph: self.pos_y,
-                        siam.z_sz_ph: z_sz,
-                        self.image: image_
-                    })
+            # update template patch size
+            z_sz = (1-self.hp.scale_lr)*z_sz + self.hp.scale_lr*scaled_exemplar[new_scale_id]
 
-                    templates_z_=(1-self.hp.z_lr)*np.asarray(templates_z_) + self.hp.z_lr*np.asarray(new_templates_z_)
+            if self.run.visualization:
+                show_frame(image_, bboxes[i,:], 1)
 
-                # update template patch size
-                z_sz = (1-self.hp.scale_lr)*z_sz + self.hp.scale_lr*scaled_exemplar[new_scale_id]
-
-                if self.run.visualization:
-                    show_frame(image_, bboxes[i,:], 1)
-
-            t_elapsed = time.time() - t_start
-            speed = num_frames/t_elapsed
-
-            # Finish off the filename queue coordinator.
-            coord.request_stop()
-            coord.join(threads)
+        t_elapsed = time.time() - t_start
+        speed = num_frames/t_elapsed
 
         plt.close('all')
 

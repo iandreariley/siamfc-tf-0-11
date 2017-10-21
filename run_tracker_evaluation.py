@@ -28,7 +28,7 @@ def main():
     # [1 4 7] => [1 1 2 3 4 5 6 7 7]  (length 3*3)
     final_score_sz = hp.response_up * (design.score_sz - 1) + 1
     # build TF graph once for all
-    image, templates_z, scores = siam.build_tracking_graph(final_score_sz, design, env)
+    detector = siam.SiameseNetwork(hp, design, env)
 
     # iterate through all videos of evaluation.dataset
     if evaluation.video == 'all':
@@ -59,7 +59,7 @@ def main():
             try:
                 gt, frame_name_list, frame_sz, n_frames = _init_video(env, evaluation, videos_list[i])
                 bbox = region_to_bbox(gt[0])
-                tracker = Tracker(hp, run, design, frame_name_list, bbox, image, templates_z, scores)
+                tracker = Tracker(hp, run, design, frame_name_list, bbox, detector)
                 bboxes, speed[i] = tracker.track()
                 lengths[i], precisions[i], precisions_auc[i], ious[i], gt_bboxes = _compile_results(gt, bboxes, evaluation.dist_threshold)
                 pred = collections.OrderedDict(zip(frame_name_list, bboxes))
@@ -89,7 +89,7 @@ def main():
     else:
         gt, frame_name_list, _, _ = _init_video(env, evaluation, evaluation.video)
         bbox = region_to_bbox(gt[evaluation.start_frame])
-        tracker = Tracker(hp, run, design, frame_name_list, bbox, image, templates_z, scores)
+        tracker = Tracker(hp, run, design, frame_name_list, bbox, detector)
         bboxes, speed = tracker.track()
         _, precision, precision_auc, iou, _ = _compile_results(gt, bboxes, evaluation.dist_threshold)
         print evaluation.video + \

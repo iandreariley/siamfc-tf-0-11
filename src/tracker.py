@@ -44,9 +44,9 @@ class Tracker:
         # Get an image from the queue
         for i in range(1, num_frames):
             image_ = ndimage.imread(self.frame_name_list[i])
-            pos_x, pos_y, target_w, target_h = self.detector.detect(image_)
+            self.pos_x, self.pos_y, self.target_w, self.target_h = self.detector.detect(image_)
             # convert <cx,cy,w,h> to <x,y,w,h>
-            bboxes[i, :] = self.pos_x-target_w/2, self.pos_y-target_h/2, target_w, target_h
+            bboxes[i, :] = self.pos_x - self.target_w / 2, self.pos_y - self.target_h / 2, self.target_w, self.target_h
 
             if self.run.visualization:
                 show_frame(image_, bboxes[i, :], 1)

@@ -37,7 +37,7 @@ class Tracker:
         # save first frame position (from ground-truth)
         bboxes[0,:] = self.pos_x - self.target_w/2, self.pos_y - self.target_h/2, self.target_w, self.target_h
         image_ = ndimage.imread(self.frame_name_list[0])
-        self.detector.set_target(image_, self.frame_name_list[0])
+        self.detector.set_target(image_, (self.pos_x, self.pos_y, self.target_w, self.target_h))
 
         t_start = time.time()
 
